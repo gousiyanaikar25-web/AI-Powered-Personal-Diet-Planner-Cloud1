@@ -1,0 +1,1534 @@
+﻿import { useState } from "react";
+import "./App.css";
+
+const API_URL = "http://127.0.0.1:5000";
+
+function App() {
+  const [page, setPage] = useState("landing");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const [user, setUser] = useState(
+    JSON.parse(localStorage.getItem("dietPlannerUser") || "null")
+  );
+
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
+
+  const [profile, setProfile] = useState({
+    name: "",
+    age: "",
+    sex: "male",
+    height_cm: "",
+    weight_kg: "",
+    activity_level: "moderate",
+    goal: "maintain",
+    diet_pref: "balanced",
+    allergies: "",
+    cuisines: "",
+    budget_per_day: "",
+    timeline_weeks: "",
+  });
+
+  const [plan, setPlan] = useState(null);
+
+  const handleChange = (e) => {
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleProfileChange = (e) => {
+    setProfile({
+      ...profile,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const register = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Registration failed");
+      }
+
+      setMessage("Registration successful. Please login.");
+      setPage("login");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const login = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Login failed");
+      }
+
+      localStorage.setItem("dietPlannerToken", data.user.idToken);
+      localStorage.setItem("dietPlannerUser", JSON.stringify(data.user));
+
+      setUser(data.user);
+      setPage("dashboard");
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem("dietPlannerToken");
+    localStorage.removeItem("dietPlannerUser");
+    setUser(null);
+    setPage("landing");
+  };
+
+  const openProfile = () => {
+    setProfile({
+      ...profile,
+      name: user?.email?.split("@")[0] || "",
+    });
+    setPage("profile");
+  };
+
+  const calculatePreview = () => {
+    const weight = Number(profile.weight_kg);
+    const height = Number(profile.height_cm);
+    const age = Number(profile.age);
+
+    if (!weight || !height || !age) {
+      setMessage("Please complete age, height and weight first.");
+      return;
+    }
+
+    let bmr;
+
+    if (profile.sex === "male") {
+      bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+    } else {
+      bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+    }
+
+    const activityMap = {
+      sedentary: 1.2,
+      light: 1.375,
+      moderate: 1.55,
+      active: 1.725,
+    };
+
+    let calories = bmr * (activityMap[profile.activity_level] || 1.55);
+
+    if (profile.goal === "cut") calories *= 0.85;
+    if (profile.goal === "gain") calories *= 1.15;
+
+    calories = Math.round(calories);
+
+    const protein = Math.round((calories * 0.3) / 4);
+    const carbs = Math.round((calories * 0.4) / 4);
+    const fat = Math.round((calories * 0.3) / 9);
+
+    const generatedPlan = {
+      id: Date.now(),
+      createdAt: new Date().toLocaleDateString(),
+      calories,
+      bmr: Math.round(bmr),
+      protein,
+      carbs,
+      fat,
+      goal: profile.goal,
+      diet: profile.diet_pref,
+      days: [
+        {
+          day: "Day 1",
+          meals: [
+            {
+              name: "Breakfast",
+              food: "Oats, banana and milk",
+              calories: Math.round(calories * 0.25),
+            },
+            {
+              name: "Lunch",
+              food: "Rice, dal, vegetables and curd",
+              calories: Math.round(calories * 0.35),
+            },
+            {
+              name: "Snack",
+              food: "Fruit and nuts",
+              calories: Math.round(calories * 0.1),
+            },
+            {
+              name: "Dinner",
+              food: "Roti, paneer and vegetables",
+              calories: Math.round(calories * 0.3),
+            },
+          ],
+        },
+        {
+          day: "Day 2",
+          meals: [
+            {
+              name: "Breakfast",
+              food: "Vegetable poha and fruit",
+              calories: Math.round(calories * 0.25),
+            },
+            {
+              name: "Lunch",
+              food: "Chapati, dal and mixed vegetables",
+              calories: Math.round(calories * 0.35),
+            },
+            {
+              name: "Snack",
+              food: "Yogurt and fruit",
+              calories: Math.round(calories * 0.1),
+            },
+            {
+              name: "Dinner",
+              food: "Rice, vegetables and protein source",
+              calories: Math.round(calories * 0.3),
+            },
+          ],
+        },
+      ],
+    };
+
+    setPlan(generatedPlan);
+
+    const savedPlans = JSON.parse(
+      localStorage.getItem("dietPlannerPlans") || "[]"
+    );
+
+    localStorage.setItem(
+      "dietPlannerPlans",
+      JSON.stringify([generatedPlan, ...savedPlans])
+    );
+
+    setMessage("");
+    setPage("plan-result");
+  };
+
+  const savedPlans = JSON.parse(
+    localStorage.getItem("dietPlannerPlans") || "[]"
+  );
+
+  if (page === "dashboard") {
+    return (
+      <Dashboard
+        user={user}
+        openProfile={openProfile}
+        setPage={setPage}
+        logout={logout}
+        savedPlans={savedPlans}
+      />
+    );
+  }
+
+  if (page === "profile") {
+    return (
+      <Profile
+        profile={profile}
+        handleProfileChange={handleProfileChange}
+        setPage={setPage}
+        setMessage={setMessage}
+        message={message}
+      />
+    );
+  }
+
+  if (page === "generate") {
+    return (
+      <GeneratePlan
+        profile={profile}
+        handleProfileChange={handleProfileChange}
+        calculatePreview={calculatePreview}
+        setPage={setPage}
+        message={message}
+      />
+    );
+  }
+
+  if (page === "plan-result") {
+    return (
+      <PlanResult
+        plan={plan}
+        setPage={setPage}
+      />
+    );
+  }
+
+  if (page === "saved") {
+    return (
+      <SavedPlans
+        setPage={setPage}
+        plans={savedPlans}
+        setPlan={setPlan}
+      />
+    );
+  }
+
+  if (page === "files") {
+    return <CloudFiles setPage={setPage} />;
+  }
+
+  if (page === "register" || page === "login") {
+    const isRegister = page === "register";
+
+    return (
+      <div className="auth-page">
+        <div className="auth-card">
+          <button
+            className="back-button"
+            onClick={() => {
+              setPage("landing");
+              setMessage("");
+            }}
+          >
+            Back to home
+          </button>
+
+          <div className="auth-logo">D</div>
+
+          <p className="eyebrow">
+            {isRegister ? "CREATE ACCOUNT" : "WELCOME BACK"}
+          </p>
+
+          <h1>
+            {isRegister ? "Start your nutrition journey" : "Sign in to DietAI"}
+          </h1>
+
+          <p className="auth-subtitle">
+            {isRegister
+              ? "Create your account to build personalized diet plans."
+              : "Access your personalized nutrition dashboard."}
+          </p>
+
+          <form onSubmit={isRegister ? register : login}>
+            {isRegister && (
+              <label>
+                Name
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="Your name"
+                  required
+                />
+              </label>
+            )}
+
+            <label>
+              Email
+              <input
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={handleChange}
+                placeholder="you@example.com"
+                required
+              />
+            </label>
+
+            <label>
+              Password
+              <input
+                name="password"
+                type="password"
+                value={form.password}
+                onChange={handleChange}
+                placeholder="Minimum 6 characters"
+                required
+              />
+            </label>
+
+            {message && <div className="error-message">{message}</div>}
+
+            <button className="primary-button auth-submit" disabled={loading}>
+              {loading
+                ? "Please wait..."
+                : isRegister
+                ? "Create Account"
+                : "Login"}
+            </button>
+          </form>
+
+          <div className="auth-switch">
+            {isRegister ? (
+              <>
+                Already have an account?
+                <button onClick={() => setPage("login")}>Login</button>
+              </>
+            ) : (
+              <>
+                New to DietAI?
+                <button onClick={() => setPage("register")}>
+                  Create account
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="landing-page">
+      <header className="landing-header">
+        <div className="brand">
+          <div className="brand-mark">D</div>
+          <div>
+            <strong>DietAI</strong>
+            <span>Personal Planner</span>
+          </div>
+        </div>
+
+        <div className="header-actions">
+          <button className="secondary-button" onClick={() => setPage("login")}>
+            Sign in
+          </button>
+
+          <button className="primary-button" onClick={() => setPage("register")}>
+            Create your plan
+          </button>
+        </div>
+      </header>
+
+      <main className="landing-main">
+        <section className="hero-section">
+          <div className="hero-content">
+            <p className="eyebrow">AI-POWERED NUTRITION</p>
+
+            <h1>
+              Your personal diet plan,
+              <span> intelligently created.</span>
+            </h1>
+
+            <p className="hero-text">
+              DietAI combines your goals, body metrics, activity level and food
+              preferences to create personalized nutrition plans and track your
+              progress securely in the cloud.
+            </p>
+
+            <div className="hero-actions">
+              <button
+                className="primary-button large-button"
+                onClick={() => setPage("register")}
+              >
+                Create your plan
+              </button>
+
+              <button
+                className="secondary-button large-button"
+                onClick={() => setPage("login")}
+              >
+                Sign in
+              </button>
+            </div>
+
+            <div className="trust-row">
+              <div>
+                <strong>AI</strong>
+                <span>Personalized plans</span>
+              </div>
+
+              <div>
+                <strong>Cloud</strong>
+                <span>Secure storage</span>
+              </div>
+
+              <div>
+                <strong>24/7</strong>
+                <span>Progress tracking</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="hero-visual">
+            <div className="dashboard-preview">
+              <div className="preview-header">
+                <span>Today's nutrition</span>
+                <span className="preview-dot"></span>
+              </div>
+
+              <div className="calorie-ring">
+                <strong>1,842</strong>
+                <span>kcal target</span>
+              </div>
+
+              <div className="macro-bars">
+                <div>
+                  <span>Protein</span>
+                  <strong>30%</strong>
+                </div>
+
+                <div>
+                  <span>Carbs</span>
+                  <strong>40%</strong>
+                </div>
+
+                <div>
+                  <span>Fat</span>
+                  <strong>30%</strong>
+                </div>
+              </div>
+
+              <div className="preview-meal">
+                <div className="meal-icon">B</div>
+                <div>
+                  <strong>Breakfast</strong>
+                  <span>Balanced meal</span>
+                </div>
+                <b>420 kcal</b>
+              </div>
+
+              <div className="preview-meal">
+                <div className="meal-icon">L</div>
+                <div>
+                  <strong>Lunch</strong>
+                  <span>Protein focused</span>
+                </div>
+                <b>610 kcal</b>
+              </div>
+            </div>
+
+            <div className="floating-chip chip-one">
+              <span>OK</span> Goal on track
+            </div>
+
+            <div className="floating-chip chip-two">
+              <span>AI</span> AI plan ready
+            </div>
+          </div>
+        </section>
+
+        <section className="feature-strip">
+          <div>
+            <strong>Personalized AI Plans</strong>
+            <span>Based on your profile and goals</span>
+          </div>
+
+          <div>
+            <strong>Cloud Storage</strong>
+            <span>Keep plans and files organized</span>
+          </div>
+
+          <div>
+            <strong>Progress Dashboard</strong>
+            <span>Track your nutrition journey</span>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+/* =========================
+   DASHBOARD
+========================= */
+
+function Dashboard({
+  user,
+  openProfile,
+  setPage,
+  logout,
+  savedPlans,
+}) {
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">D</div>
+          <div>
+            <strong>DietAI</strong>
+            <span>Personal Planner</span>
+          </div>
+        </div>
+
+        <nav className="sidebar-nav">
+          <button
+            className="nav-item active"
+            onClick={() => setPage("dashboard")}
+          >
+            Dashboard
+          </button>
+
+          <button className="nav-item" onClick={openProfile}>
+            My Profile
+          </button>
+
+          <button
+            className="nav-item"
+            onClick={() => setPage("generate")}
+          >
+            Generate Plan
+          </button>
+
+          <button
+            className="nav-item"
+            onClick={() => setPage("saved")}
+          >
+            Saved Plans
+          </button>
+
+          <button
+            className="nav-item"
+            onClick={() => setPage("files")}
+          >
+            Cloud Files
+          </button>
+        </nav>
+
+        <button className="logout-button" onClick={logout}>
+          Logout
+        </button>
+      </aside>
+
+      <main className="dashboard-main">
+        <header className="dashboard-header">
+          <div>
+            <p className="eyebrow">PERSONAL DASHBOARD</p>
+            <h1>Welcome back!</h1>
+            <p className="muted">
+              Your personalized nutrition journey starts here.
+            </p>
+          </div>
+
+          <div className="user-badge">
+            <div className="avatar">
+              {(user?.email?.[0] || "U").toUpperCase()}
+            </div>
+            <span>{user?.email || "User"}</span>
+          </div>
+        </header>
+
+        <section className="dashboard-grid">
+          <div className="dashboard-card hero-card">
+            <div>
+              <p className="card-label">CURRENT GOAL</p>
+              <h2>Build your personalized plan</h2>
+              <p>
+                Complete your profile and generate a nutrition plan based on
+                your body metrics, activity and goal.
+              </p>
+
+              <button
+                className="primary-button"
+                onClick={() => setPage("generate")}
+              >
+                Generate Diet Plan
+              </button>
+            </div>
+
+            <div className="goal-visual">
+              <div className="goal-circle">AI</div>
+            </div>
+          </div>
+
+          <div className="dashboard-card stat-card">
+            <span className="stat-icon">01</span>
+            <p>Diet Preference</p>
+            <strong>Personalized</strong>
+            <small>Based on your profile</small>
+          </div>
+
+          <div className="dashboard-card stat-card">
+            <span className="stat-icon">02</span>
+            <p>Saved Plans</p>
+            <strong>{savedPlans.length}</strong>
+            <small>Generated plans</small>
+          </div>
+
+          <div className="dashboard-card stat-card">
+            <span className="stat-icon">03</span>
+            <p>Cloud Files</p>
+            <strong>0 files</strong>
+            <small>Your uploaded files</small>
+          </div>
+        </section>
+
+        <section className="dashboard-card quick-card">
+          <div>
+            <p className="card-label">QUICK ACTIONS</p>
+            <h2>Manage your nutrition</h2>
+            <p className="muted">
+              Create plans, review saved plans and manage your cloud files.
+            </p>
+          </div>
+
+          <div className="quick-actions">
+            <button onClick={openProfile}>My Profile</button>
+            <button onClick={() => setPage("generate")}>
+              Generate Plan
+            </button>
+            <button onClick={() => setPage("saved")}>
+              Saved Plans
+            </button>
+            <button onClick={() => setPage("files")}>
+              Cloud Files
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+/* =========================
+   PROFILE
+========================= */
+
+function Profile({
+  profile,
+  handleProfileChange,
+  setPage,
+  setMessage,
+  message,
+}) {
+  return (
+    <div className="auth-page profile-page">
+      <div className="profile-container">
+        <div className="profile-top">
+          <button
+            className="back-button"
+            onClick={() => setPage("dashboard")}
+          >
+            Back to Dashboard
+          </button>
+
+          <div className="profile-heading">
+            <p className="eyebrow">YOUR PROFILE</p>
+            <h1>Build your nutrition profile</h1>
+            <p>
+              Add your body details, activity level, goals and dietary
+              preferences.
+            </p>
+          </div>
+        </div>
+
+        <form
+          className="profile-card"
+          onSubmit={async (e) => {
+  e.preventDefault();
+
+  try {
+    const token = localStorage.getItem("dietPlannerToken");
+    const currentUser = JSON.parse(
+      localStorage.getItem("dietPlannerUser") || "null"
+    );
+
+    if (!token || !currentUser?.localId) {
+      setMessage("Please login again before saving your profile.");
+      return;
+    }
+
+    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+
+    const profileData = {
+      name: profile.name,
+      age: Number(profile.age),
+      sex: profile.sex,
+      height_cm: Number(profile.height_cm),
+      weight_kg: Number(profile.weight_kg),
+      activity_level: profile.activity_level,
+      goal: profile.goal,
+      diet_pref: profile.diet_pref,
+      allergies: profile.allergies
+        ? profile.allergies
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : [],
+      cuisines: profile.cuisines
+        ? profile.cuisines
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : [],
+      budget_per_day: profile.budget_per_day
+        ? Number(profile.budget_per_day)
+        : 0,
+      timeline_weeks: profile.timeline_weeks
+        ? Number(profile.timeline_weeks)
+        : 0,
+      updatedAt: new Date().toISOString(),
+    };    
+    const uid = currentUser?.localId;
+
+    if (!uid) {
+      throw new Error("User authentication session not found.");
+    }
+
+
+    if (!projectId || !apiKey) {
+      throw new Error("Firebase configuration is missing.");
+    }
+
+    const fields = {};
+
+    Object.entries(profileData).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        fields[key] = {
+          arrayValue: {
+            values: value.map((item) => ({
+              stringValue: item,
+            })),
+          },
+        };
+      } else if (typeof value === "number") {
+        fields[key] = {
+          doubleValue: value,
+        };
+      } else {
+        fields[key] = {
+          stringValue: String(value),
+        };
+      }
+    });
+
+    const response = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${projectId}/databases/%28default%29/documents/users/${uid}/profile?key=${apiKey}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ fields }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("Firestore error:", data);
+      throw new Error(
+        data?.error?.message || "Failed to save profile."
+      );
+    }
+
+    setMessage("Profile saved successfully to Firebase Cloud.");
+  } catch (error) {
+    console.error("Profile save error:", error);
+    setMessage(error.message || "Failed to save profile.");
+  }
+}}
+        >
+          <div className="form-section">
+            <h2>Basic Information</h2>
+
+            <div className="form-grid">
+              <label>
+                Full Name
+                <input
+                  name="name"
+                  value={profile.name}
+                  onChange={handleProfileChange}
+                  placeholder="Enter your name"
+                  required
+                />
+              </label>
+
+              <label>
+                Age
+                <input
+                  name="age"
+                  type="number"
+                  value={profile.age}
+                  onChange={handleProfileChange}
+                  placeholder="Age"
+                  required
+                />
+              </label>
+
+              <label>
+                Sex
+                <select
+                  name="sex"
+                  value={profile.sex}
+                  onChange={handleProfileChange}
+                >
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </label>
+
+              <label>
+                Height (cm)
+                <input
+                  name="height_cm"
+                  type="number"
+                  value={profile.height_cm}
+                  onChange={handleProfileChange}
+                  placeholder="Height"
+                  required
+                />
+              </label>
+
+              <label>
+                Weight (kg)
+                <input
+                  name="weight_kg"
+                  type="number"
+                  value={profile.weight_kg}
+                  onChange={handleProfileChange}
+                  placeholder="Weight"
+                  required
+                />
+              </label>
+
+              <label>
+                Activity Level
+                <select
+                  name="activity_level"
+                  value={profile.activity_level}
+                  onChange={handleProfileChange}
+                >
+                  <option value="sedentary">Sedentary</option>
+                  <option value="light">Light</option>
+                  <option value="moderate">Moderate</option>
+                  <option value="active">Active</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="form-section">
+            <h2>Nutrition Goal</h2>
+
+            <div className="form-grid">
+              <label>
+                Goal
+                <select
+                  name="goal"
+                  value={profile.goal}
+                  onChange={handleProfileChange}
+                >
+                  <option value="cut">Weight Loss</option>
+                  <option value="maintain">Maintain Weight</option>
+                  <option value="gain">Weight Gain</option>
+                </select>
+              </label>
+
+              <label>
+                Diet Preference
+                <select
+                  name="diet_pref"
+                  value={profile.diet_pref}
+                  onChange={handleProfileChange}
+                >
+                  <option value="balanced">Balanced</option>
+                  <option value="vegetarian">Vegetarian</option>
+                  <option value="vegan">Vegan</option>
+                  <option value="non-vegetarian">Non-Vegetarian</option>
+                </select>
+              </label>
+
+              <label>
+                Budget Per Day
+                <input
+                  name="budget_per_day"
+                  type="number"
+                  value={profile.budget_per_day}
+                  onChange={handleProfileChange}
+                  placeholder="Budget"
+                />
+              </label>
+
+              <label>
+                Timeline (weeks)
+                <input
+                  name="timeline_weeks"
+                  type="number"
+                  value={profile.timeline_weeks}
+                  onChange={handleProfileChange}
+                  placeholder="Weeks"
+                />
+              </label>
+
+              <label className="full-width">
+                Allergies
+                <input
+                  name="allergies"
+                  value={profile.allergies}
+                  onChange={handleProfileChange}
+                  placeholder="Example: peanuts, dairy"
+                />
+              </label>
+
+              <label className="full-width">
+                Preferred Cuisines
+                <input
+                  name="cuisines"
+                  value={profile.cuisines}
+                  onChange={handleProfileChange}
+                  placeholder="Example: Indian, South Indian"
+                />
+              </label>
+            </div>
+          </div>
+
+          {message && <div className="success-message">{message}</div>}
+
+          <div className="profile-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setPage("dashboard")}
+            >
+              Cancel
+            </button>
+
+            <button type="submit" className="primary-button">
+              Save Profile
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   GENERATE PLAN
+========================= */
+
+function GeneratePlan({
+  profile,
+  handleProfileChange,
+  calculatePreview,
+  setPage,
+  message,
+}) {
+  return (
+    <div className="auth-page profile-page">
+      <div className="profile-container">
+        <div className="profile-top">
+          <button
+            className="back-button"
+            onClick={() => setPage("dashboard")}
+          >
+            Back to Dashboard
+          </button>
+
+          <div className="profile-heading">
+            <p className="eyebrow">AI DIET PLANNER</p>
+            <h1>Generate your personalized plan</h1>
+            <p>
+              Enter your details and DietAI will calculate your daily
+              nutrition target.
+            </p>
+          </div>
+        </div>
+
+        <div className="profile-card">
+          <div className="form-section">
+            <h2>Plan Inputs</h2>
+
+            <div className="form-grid">
+              <label>
+                Age
+                <input
+                  name="age"
+                  type="number"
+                  value={profile.age}
+                  onChange={handleProfileChange}
+                  placeholder="Age"
+                />
+              </label>
+
+              <label>
+                Sex
+                <select
+                  name="sex"
+                  value={profile.sex}
+                  onChange={handleProfileChange}
+                >
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </label>
+
+              <label>
+                Height (cm)
+                <input
+                  name="height_cm"
+                  type="number"
+                  value={profile.height_cm}
+                  onChange={handleProfileChange}
+                  placeholder="Height"
+                />
+              </label>
+
+              <label>
+                Weight (kg)
+                <input
+                  name="weight_kg"
+                  type="number"
+                  value={profile.weight_kg}
+                  onChange={handleProfileChange}
+                  placeholder="Weight"
+                />
+              </label>
+
+              <label>
+                Activity Level
+                <select
+                  name="activity_level"
+                  value={profile.activity_level}
+                  onChange={handleProfileChange}
+                >
+                  <option value="sedentary">Sedentary</option>
+                  <option value="light">Light</option>
+                  <option value="moderate">Moderate</option>
+                  <option value="active">Active</option>
+                </select>
+              </label>
+
+              <label>
+                Goal
+                <select
+                  name="goal"
+                  value={profile.goal}
+                  onChange={handleProfileChange}
+                >
+                  <option value="cut">Weight Loss</option>
+                  <option value="maintain">Maintain Weight</option>
+                  <option value="gain">Weight Gain</option>
+                </select>
+              </label>
+
+              <label>
+                Diet Preference
+                <select
+                  name="diet_pref"
+                  value={profile.diet_pref}
+                  onChange={handleProfileChange}
+                >
+                  <option value="balanced">Balanced</option>
+                  <option value="vegetarian">Vegetarian</option>
+                  <option value="vegan">Vegan</option>
+                  <option value="non-vegetarian">Non-Vegetarian</option>
+                </select>
+              </label>
+
+              <label>
+                Timeline (weeks)
+                <input
+                  name="timeline_weeks"
+                  type="number"
+                  value={profile.timeline_weeks}
+                  onChange={handleProfileChange}
+                  placeholder="Weeks"
+                />
+              </label>
+
+              <label className="full-width">
+                Allergies
+                <input
+                  name="allergies"
+                  value={profile.allergies}
+                  onChange={handleProfileChange}
+                  placeholder="Example: peanuts, dairy"
+                />
+              </label>
+
+              <label className="full-width">
+                Preferred Cuisines
+                <input
+                  name="cuisines"
+                  value={profile.cuisines}
+                  onChange={handleProfileChange}
+                  placeholder="Example: Indian, South Indian"
+                />
+              </label>
+            </div>
+          </div>
+
+          {message && <div className="error-message">{message}</div>}
+
+          <div className="profile-actions">
+            <button
+              className="secondary-button"
+              onClick={() => setPage("profile")}
+            >
+              Edit Profile
+            </button>
+
+            <button
+              className="primary-button"
+              onClick={calculatePreview}
+            >
+              Generate AI Diet Plan
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   PLAN RESULT
+========================= */
+
+function PlanResult({ plan, setPage }) {
+  if (!plan) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card">
+          <h1>No plan found</h1>
+          <button
+            className="primary-button"
+            onClick={() => setPage("generate")}
+          >
+            Generate Plan
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="auth-page profile-page">
+      <div className="profile-container">
+        <div className="profile-top">
+          <button
+            className="back-button"
+            onClick={() => setPage("dashboard")}
+          >
+            Back to Dashboard
+          </button>
+
+          <div className="profile-heading">
+            <p className="eyebrow">PLAN RESULT</p>
+            <h1>Your personalized diet plan</h1>
+            <p>
+              Generated based on your current profile and nutrition goal.
+            </p>
+          </div>
+        </div>
+
+        <div className="dashboard-grid">
+          <div className="dashboard-card stat-card">
+            <span className="stat-icon">K</span>
+            <p>Daily Calories</p>
+            <strong>{plan.calories} kcal</strong>
+            <small>Target</small>
+          </div>
+
+          <div className="dashboard-card stat-card">
+            <span className="stat-icon">P</span>
+            <p>Protein</p>
+            <strong>{plan.protein} g</strong>
+            <small>30 percent</small>
+          </div>
+
+          <div className="dashboard-card stat-card">
+            <span className="stat-icon">C</span>
+            <p>Carbohydrates</p>
+            <strong>{plan.carbs} g</strong>
+            <small>40 percent</small>
+          </div>
+
+          <div className="dashboard-card stat-card">
+            <span className="stat-icon">F</span>
+            <p>Fat</p>
+            <strong>{plan.fat} g</strong>
+            <small>30 percent</small>
+          </div>
+        </div>
+
+        <div className="profile-card" style={{ marginTop: "20px" }}>
+          <div className="form-section">
+            <h2>Day 1</h2>
+
+            {plan.days[0].meals.map((meal) => (
+              <div className="preview-meal" key={meal.name}>
+                <div className="meal-icon">
+                  {meal.name.charAt(0)}
+                </div>
+
+                <div>
+                  <strong>{meal.name}</strong>
+                  <span>{meal.food}</span>
+                </div>
+
+                <b>{meal.calories} kcal</b>
+              </div>
+            ))}
+          </div>
+
+          <div className="form-section">
+            <h2>Day 2</h2>
+
+            {plan.days[1].meals.map((meal) => (
+              <div className="preview-meal" key={meal.name}>
+                <div className="meal-icon">
+                  {meal.name.charAt(0)}
+                </div>
+
+                <div>
+                  <strong>{meal.name}</strong>
+                  <span>{meal.food}</span>
+                </div>
+
+                <b>{meal.calories} kcal</b>
+              </div>
+            ))}
+          </div>
+
+          <div className="profile-actions">
+            <button
+              className="secondary-button"
+              onClick={() => setPage("saved")}
+            >
+              View Saved Plans
+            </button>
+
+            <button
+              className="primary-button"
+              onClick={() => setPage("generate")}
+            >
+              Generate New Plan
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   SAVED PLANS
+========================= */
+
+function SavedPlans({ setPage, plans, setPlan }) {
+  return (
+    <div className="auth-page profile-page">
+      <div className="profile-container">
+        <div className="profile-top">
+          <button
+            className="back-button"
+            onClick={() => setPage("dashboard")}
+          >
+            Back to Dashboard
+          </button>
+
+          <div className="profile-heading">
+            <p className="eyebrow">PLAN HISTORY</p>
+            <h1>Saved Plans</h1>
+            <p>
+              Review your previously generated personalized diet plans.
+            </p>
+          </div>
+        </div>
+
+        {plans.length === 0 ? (
+          <div className="profile-card" style={{ textAlign: "center" }}>
+            <h2>No saved plans yet</h2>
+            <p className="muted">
+              Generate your first personalized diet plan to see it here.
+            </p>
+
+            <button
+              className="primary-button"
+              onClick={() => setPage("generate")}
+            >
+              Generate First Plan
+            </button>
+          </div>
+        ) : (
+          <div className="saved-plans-grid">
+            {plans.map((item) => (
+              <div className="dashboard-card saved-plan-card" key={item.id}>
+                <div className="saved-plan-top">
+                  <span className="card-label">DIET PLAN</span>
+                  <span className="plan-date">{item.createdAt}</span>
+                </div>
+
+                <h2>{item.calories} kcal / day</h2>
+
+                <p className="muted">
+                  Goal: {item.goal}
+                  <br />
+                  Diet: {item.diet}
+                </p>
+
+                <div className="plan-mini-stats">
+                  <span>Protein {item.protein}g</span>
+                  <span>Carbs {item.carbs}g</span>
+                  <span>Fat {item.fat}g</span>
+                </div>
+
+                <button
+                  className="primary-button"
+                  onClick={() => {
+                    setPlan(item);
+                    setPage("plan-result");
+                  }}
+                >
+                  View Plan
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   CLOUD FILES
+========================= */
+
+function CloudFiles({ setPage }) {
+  const [files, setFiles] = useState([]);
+
+  const handleFile = (e) => {
+    const selected = Array.from(e.target.files || []);
+
+    const mapped = selected.map((file) => ({
+      id: `${file.name}-${file.lastModified}`,
+      name: file.name,
+      size: `${(file.size / 1024).toFixed(1)} KB`,
+      type: file.type || "File",
+    }));
+
+    setFiles((current) => [...current, ...mapped]);
+  };
+
+  const removeFile = (id) => {
+    setFiles((current) => current.filter((file) => file.id !== id));
+  };
+
+  return (
+    <div className="auth-page profile-page">
+      <div className="profile-container">
+        <div className="profile-top">
+          <button
+            className="back-button"
+            onClick={() => setPage("dashboard")}
+          >
+            Back to Dashboard
+          </button>
+
+          <div className="profile-heading">
+            <p className="eyebrow">CLOUD STORAGE</p>
+            <h1>Cloud Files</h1>
+            <p>
+              Upload and manage documents associated with your nutrition
+              journey.
+            </p>
+          </div>
+        </div>
+
+        <div className="profile-card">
+          <div className="upload-zone">
+            <div className="upload-icon">UP</div>
+            <h2>Upload a file</h2>
+            <p>
+              Select a nutrition document, report or supporting file.
+            </p>
+
+            <label className="primary-button upload-button">
+              Choose File
+              <input
+                type="file"
+                onChange={handleFile}
+                hidden
+              />
+            </label>
+          </div>
+        </div>
+
+        <div style={{ height: "20px" }}></div>
+
+        <div className="profile-card">
+          <div className="saved-plan-top">
+            <div>
+              <span className="card-label">YOUR FILES</span>
+              <h2>Uploaded Files</h2>
+            </div>
+
+            <strong>{files.length} files</strong>
+          </div>
+
+          {files.length === 0 ? (
+            <div className="empty-files">
+              <div className="upload-icon">FILE</div>
+              <h3>No files uploaded</h3>
+              <p className="muted">
+                Your uploaded cloud files will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="file-list">
+              {files.map((file) => (
+                <div className="file-row" key={file.id}>
+                  <div className="file-icon">DOC</div>
+
+                  <div className="file-info">
+                    <strong>{file.name}</strong>
+                    <span>
+                      {file.size} - {file.type}
+                    </span>
+                  </div>
+
+                  <button
+                    className="file-delete"
+                    onClick={() => removeFile(file.id)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;
+
+
+
+
+
+

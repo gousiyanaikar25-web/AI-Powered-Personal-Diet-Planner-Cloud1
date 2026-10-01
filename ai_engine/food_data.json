@@ -1,0 +1,140 @@
+[
+  {
+    "name": "Oats Banana Protein Bowl",
+    "per100": {"kcal": 389, "p": 16.9, "c": 66.3, "f": 6.9},
+    "tags": ["vegetarian", "vegan", "balanced", "protein", "breakfast", "weight-gain"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Moong Dal Chilla",
+    "per100": {"kcal": 170, "p": 8.5, "c": 25, "f": 4},
+    "tags": ["vegetarian", "vegan", "balanced", "protein", "breakfast", "weight-loss"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Vegetable Poha",
+    "per100": {"kcal": 180, "p": 4, "c": 32, "f": 4},
+    "tags": ["vegetarian", "vegan", "balanced", "breakfast", "weight-loss"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Paneer Rice Bowl",
+    "per100": {"kcal": 220, "p": 11, "c": 27, "f": 8},
+    "tags": ["vegetarian", "balanced", "protein", "lunch", "dinner", "weight-gain"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Paneer Tikka Salad",
+    "per100": {"kcal": 175, "p": 15, "c": 9, "f": 8},
+    "tags": ["vegetarian", "balanced", "protein", "lunch", "dinner", "weight-loss"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Chickpea Salad",
+    "per100": {"kcal": 164, "p": 8.9, "c": 27.4, "f": 2.6},
+    "tags": ["vegetarian", "vegan", "balanced", "protein", "lunch", "weight-loss"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Rajma Rice",
+    "per100": {"kcal": 190, "p": 7.5, "c": 34, "f": 2.8},
+    "tags": ["vegetarian", "vegan", "balanced", "lunch", "dinner", "weight-gain"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Tofu Stir Fry",
+    "per100": {"kcal": 145, "p": 12, "c": 8, "f": 7},
+    "tags": ["vegetarian", "vegan", "protein", "lunch", "dinner", "weight-loss"],
+    "cuisine": "asian"
+  },
+  {
+    "name": "Vegetable Quinoa Bowl",
+    "per100": {"kcal": 150, "p": 6, "c": 25, "f": 3},
+    "tags": ["vegetarian", "vegan", "balanced", "lunch", "weight-loss"],
+    "cuisine": "asian"
+  },
+  {
+    "name": "Lentil Khichdi",
+    "per100": {"kcal": 150, "p": 6, "c": 25, "f": 3},
+    "tags": ["vegetarian", "vegan", "balanced", "lunch", "dinner", "weight-loss"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Fruit Yogurt Bowl",
+    "per100": {"kcal": 110, "p": 5, "c": 16, "f": 3},
+    "tags": ["vegetarian", "balanced", "breakfast", "snack", "weight-loss"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Greek Yogurt Fruit Bowl",
+    "per100": {"kcal": 120, "p": 9, "c": 15, "f": 2},
+    "tags": ["vegetarian", "balanced", "protein", "breakfast", "snack", "weight-loss"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Peanut Banana Smoothie",
+    "per100": {"kcal": 210, "p": 8, "c": 25, "f": 9},
+    "tags": ["vegetarian", "vegan", "protein", "snack", "weight-gain"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Mixed Nuts and Fruit",
+    "per100": {"kcal": 300, "p": 9, "c": 25, "f": 20},
+    "tags": ["vegetarian", "vegan", "snack", "weight-gain"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Grilled Chicken Rice",
+    "per100": {"kcal": 210, "p": 22, "c": 18, "f": 6},
+    "tags": ["non-vegetarian", "balanced", "protein", "lunch", "dinner", "weight-gain"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Grilled Chicken Salad",
+    "per100": {"kcal": 165, "p": 23, "c": 7, "f": 5},
+    "tags": ["non-vegetarian", "protein", "balanced", "lunch", "dinner", "weight-loss"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Chicken Wrap",
+    "per100": {"kcal": 230, "p": 20, "c": 24, "f": 7},
+    "tags": ["non-vegetarian", "balanced", "protein", "lunch", "weight-gain"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Chicken Vegetable Stir Fry",
+    "per100": {"kcal": 175, "p": 24, "c": 8, "f": 5},
+    "tags": ["non-vegetarian", "protein", "balanced", "lunch", "dinner", "weight-loss"],
+    "cuisine": "asian"
+  },
+  {
+    "name": "Egg Vegetable Bowl",
+    "per100": {"kcal": 155, "p": 13, "c": 8, "f": 8},
+    "tags": ["non-vegetarian", "balanced", "protein", "breakfast", "lunch", "weight-loss"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Egg Avocado Toast",
+    "per100": {"kcal": 220, "p": 12, "c": 18, "f": 11},
+    "tags": ["non-vegetarian", "balanced", "protein", "breakfast", "weight-gain"],
+    "cuisine": "asian"
+  },
+  {
+    "name": "Fish Rice Bowl",
+    "per100": {"kcal": 190, "p": 20, "c": 18, "f": 5},
+    "tags": ["non-vegetarian", "protein", "balanced", "lunch", "dinner", "weight-loss"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Fish Curry Rice",
+    "per100": {"kcal": 230, "p": 19, "c": 24, "f": 8},
+    "tags": ["non-vegetarian", "protein", "balanced", "lunch", "dinner", "weight-gain"],
+    "cuisine": "indian"
+  },
+  {
+    "name": "Chicken Oats Bowl",
+    "per100": {"kcal": 205, "p": 21, "c": 20, "f": 5},
+    "tags": ["non-vegetarian", "protein", "balanced", "breakfast", "weight-loss"],
+    "cuisine": "indian"
+  }
+]

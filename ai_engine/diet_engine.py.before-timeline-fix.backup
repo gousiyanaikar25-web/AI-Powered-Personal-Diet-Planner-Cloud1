@@ -1,0 +1,234 @@
+﻿import json
+from pathlib import Path
+from datetime import datetime, timezone
+
+FOOD_FILE = Path(__file__).with_name("food_data.json")
+
+with FOOD_FILE.open("r", encoding="utf-8-sig") as file:
+    FOODS = json.load(file)
+
+
+ACTIVITY_FACTORS = {
+    "sedentary": 1.2,
+    "light": 1.375,
+    "moderate": 1.55,
+    "active": 1.725,
+}
+
+GOAL_FACTORS = {
+    "cut": 0.85,
+    "lose": 0.85,
+    "weight_loss": 0.85,
+    "gain": 1.15,
+    "weight_gain": 1.15,
+    "maintain": 1.0,
+}
+
+
+def calculate_targets(profile):
+    age = float(profile["age"])
+    height = float(profile["height_cm"])
+    weight = float(profile["weight_kg"])
+    sex = str(profile["sex"]).lower()
+
+    if sex in ("male", "m"):
+        bmr = 10 * weight + 6.25 * height - 5 * age + 5
+    else:
+        bmr = 10 * weight + 6.25 * height - 5 * age - 161
+
+    activity = str(profile.get("activity_level", "moderate")).lower()
+    tdee = bmr * ACTIVITY_FACTORS.get(activity, 1.55)
+
+    goal = str(profile.get("goal", "maintain")).lower()
+    calories = tdee * GOAL_FACTORS.get(goal, 1.0)
+
+    calories = int(round(calories))
+
+    protein = int(round((calories * 0.30) / 4))
+    carbs = int(round((calories * 0.40) / 4))
+    fat = int(round((calories * 0.30) / 9))
+
+    return {
+        "bmr": int(round(bmr)),
+        "tdee": int(round(tdee)),
+        "calories": calories,
+        "macros": {
+            "p": protein,
+            "c": carbs,
+            "f": fat,
+        },
+    }
+
+
+def _food_matches(food, diet_pref, allergies, cuisines):
+    tags = [str(x).lower() for x in food.get("tags", [])]
+    cuisine = str(food.get("cuisine", "")).lower()
+    name = str(food.get("name", "")).lower()
+
+    if diet_pref:
+        pref = str(diet_pref).lower()
+
+        if pref == "vegetarian" and any(
+            x in tags for x in ["chicken", "fish", "meat", "egg", "non-veg"]
+        ):
+            return False
+
+        if pref == "vegan" and any(
+            x in tags for x in [
+                "chicken", "fish", "meat", "egg",
+                "milk", "dairy", "paneer", "yogurt"
+            ]
+        ):
+            return False
+
+    allergy_words = [str(x).lower() for x in allergies]
+    combined = " ".join(tags + [name, cuisine])
+
+    if any(allergy in combined for allergy in allergy_words):
+        return False
+
+    if cuisines:
+        allowed = [str(x).lower() for x in cuisines]
+        if cuisine not in allowed:
+            return False
+
+    return True
+
+
+def _candidate_foods(profile):
+    diet_pref = profile.get("diet_pref", "")
+    allergies = profile.get("allergies", []) or []
+    cuisines = profile.get("cuisines", []) or []
+
+    candidates = [
+        food for food in FOODS
+        if _food_matches(food, diet_pref, allergies, cuisines)
+    ]
+
+    if len(candidates) < 4:
+        candidates = [
+            food for food in FOODS
+            if _food_matches(food, diet_pref, allergies, [])
+        ]
+
+    if len(candidates) < 4:
+        candidates = FOODS[:]
+
+    return candidates
+
+
+def _scaled_meal(food, meal_name, target_calories):
+    per100 = food.get("per100", {})
+
+    base_cal = float(per100.get("kcal", 0))
+    base_p = float(per100.get("p", 0))
+    base_c = float(per100.get("c", 0))
+    base_f = float(per100.get("f", 0))
+
+    if base_cal <= 0:
+        return None
+
+    # Portion multiplier based on the food's per-100g energy.
+    multiplier = target_calories / base_cal
+    grams = multiplier * 100
+
+    return {
+        "name": meal_name,
+        "food": food.get("name", "Food"),
+        "cuisine": food.get("cuisine", ""),
+        "portion_g": int(round(grams)),
+        "calories": int(round(base_cal * multiplier)),
+        "protein": int(round(base_p * multiplier)),
+        "carbs": int(round(base_c * multiplier)),
+        "fat": int(round(base_f * multiplier)),
+    }
+
+
+def _build_day(candidates, daily_calories, day_number):
+    meal_names = [
+        ("Breakfast", 0.25),
+        ("Lunch", 0.30),
+        ("Snack", 0.10),
+        ("Dinner", 0.35),
+    ]
+
+    meals = []
+
+    for index, (meal_name, ratio) in enumerate(meal_names):
+        food = candidates[(day_number - 1) * 4 + index] if len(candidates) >= ((day_number - 1) * 4 + index + 1) else candidates[index % len(candidates)]
+
+        target = daily_calories * ratio
+        meal = _scaled_meal(food, meal_name, target)
+
+        if meal:
+            meals.append(meal)
+
+    return {
+        "day": day_number,
+        "meals": meals,
+    }
+
+
+def generate_plan(profile, days=2):
+    required = [
+        "age",
+        "sex",
+        "height_cm",
+        "weight_kg",
+        "activity_level",
+        "goal",
+        "diet_pref",
+    ]
+
+    missing = [
+        field for field in required
+        if profile.get(field) in (None, "")
+    ]
+
+    if missing:
+        raise ValueError(f"Missing required fields: {', '.join(missing)}")
+
+    targets = calculate_targets(profile)
+    candidates = _candidate_foods(profile)
+
+    generated_days = [
+        _build_day(candidates, targets["calories"], day)
+        for day in range(1, days + 1)
+    ]
+
+    # Recalculate actual macro totals from generated meals.
+    total_protein = sum(
+        meal["protein"]
+        for day in generated_days
+        for meal in day["meals"]
+    )
+
+    total_carbs = sum(
+        meal["carbs"]
+        for day in generated_days
+        for meal in day["meals"]
+    )
+
+    total_fat = sum(
+        meal["fat"]
+        for day in generated_days
+        for meal in day["meals"]
+    )
+
+    # The API/UI currently treats calories as the daily target.
+    # Keep the target at the top level while each day's meals add up
+    # to approximately that same target.
+    plan = {
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "total_cal": targets["calories"],
+        "macros": targets["macros"],
+        "targets": targets,
+        "days": generated_days,
+        "engine": "rule-based-fallback",
+        "disclaimer": (
+            "General wellness example only. "
+            "Not medical or clinical nutrition advice."
+        ),
+    }
+
+    return plan

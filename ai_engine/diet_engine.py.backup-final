@@ -1,0 +1,508 @@
+import json
+import math
+import os
+from typing import Dict, List
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FOOD_FILE = os.path.join(BASE_DIR, "food_data.json")
+
+
+with open(FOOD_FILE, "r", encoding="utf-8-sig") as file:
+    FOODS = json.load(file)
+
+
+ACTIVITY_FACTORS = {
+    "sedentary": 1.20,
+    "light": 1.375,
+    "moderate": 1.55,
+    "active": 1.725,
+}
+
+
+GOAL_FACTORS = {
+    "cut": 0.85,
+    "loss": 0.85,
+    "lose": 0.85,
+    "weight_loss": 0.85,
+    "maintain": 1.00,
+    "maintenance": 1.00,
+    "gain": 1.15,
+    "weight_gain": 1.15,
+}
+
+
+MEAL_DISTRIBUTION = {
+    "Breakfast": 0.25,
+    "Lunch": 0.30,
+    "Snack": 0.10,
+    "Dinner": 0.35,
+}
+
+
+ALLERGY_KEYWORDS = {
+    "milk": ["milk", "paneer", "yogurt", "dairy"],
+    "dairy": ["milk", "paneer", "yogurt", "dairy"],
+    "lactose": ["milk", "paneer", "yogurt", "dairy"],
+    "peanut": ["peanut"],
+    "nuts": ["nut", "almond", "cashew"],
+    "almond": ["almond"],
+    "cashew": ["cashew"],
+    "soy": ["soy", "tofu"],
+    "gluten": ["wheat", "bread", "oat"],
+    "egg": ["egg"],
+    "eggs": ["egg"],
+    "fish": ["fish"],
+    "chicken": ["chicken"],
+    "meat": ["meat", "chicken", "fish"],
+}
+
+
+def _number(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def calculate_targets(profile: Dict) -> Dict:
+    age = _number(profile.get("age"))
+    height = _number(profile.get("height_cm"))
+    weight = _number(profile.get("weight_kg"))
+
+    if age <= 0 or height <= 0 or weight <= 0:
+        raise ValueError(
+            "Age, height and weight must be greater than zero."
+        )
+
+    sex = str(profile.get("sex", "male")).lower()
+
+    # Mifflin-St Jeor
+    if sex in ("female", "f", "woman"):
+        bmr = (10 * weight) + (6.25 * height) - (5 * age) - 161
+    else:
+        bmr = (10 * weight) + (6.25 * height) - (5 * age) + 5
+
+    activity = str(
+        profile.get("activity_level", "moderate")
+    ).lower().strip()
+
+    activity_factor = ACTIVITY_FACTORS.get(
+        activity,
+        ACTIVITY_FACTORS["moderate"]
+    )
+
+    tdee = bmr * activity_factor
+
+    goal = str(
+        profile.get("goal", "maintain")
+    ).lower().strip()
+
+    calorie_factor = GOAL_FACTORS.get(
+        goal,
+        GOAL_FACTORS["maintain"]
+    )
+
+    calories = max(
+        1200,
+        round(tdee * calorie_factor)
+    )
+
+    # Required default macro split:
+    # Protein 30%, Carbs 40%, Fat 30%
+    protein_calories = calories * 0.30
+    carb_calories = calories * 0.40
+    fat_calories = calories * 0.30
+
+    protein = round(protein_calories / 4)
+    carbs = round(carb_calories / 4)
+    fat = round(fat_calories / 9)
+
+    return {
+        "bmr": round(bmr),
+        "tdee": round(tdee),
+        "daily_calories": calories,
+        "macros": {
+            "p": protein,
+            "c": carbs,
+            "f": fat,
+        },
+    }
+
+
+def _normalise_list(value) -> List[str]:
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return [
+            str(item).strip().lower()
+            for item in value
+            if str(item).strip()
+        ]
+
+    return [
+        item.strip().lower()
+        for item in str(value).split(",")
+        if item.strip()
+    ]
+
+
+def _matches_allergies(food: Dict, allergies: List[str]) -> bool:
+    if not allergies:
+        return True
+
+    name = str(food.get("name", "")).lower()
+    tags = " ".join(
+        str(tag).lower()
+        for tag in food.get("tags", [])
+    )
+
+    searchable = f"{name} {tags}"
+
+    for allergy in allergies:
+        keywords = ALLERGY_KEYWORDS.get(
+            allergy,
+            [allergy]
+        )
+
+        for keyword in keywords:
+            if keyword.lower() in searchable:
+                return False
+
+    return True
+
+
+def _is_allowed_diet(food: Dict, diet_pref: str) -> bool:
+    tags = {
+        str(tag).strip().lower()
+        for tag in food.get("tags", [])
+    }
+
+    diet = diet_pref.lower().strip()
+
+    if diet in (
+        "vegetarian",
+        "veg",
+    ):
+        return "vegetarian" in tags and "non-vegetarian" not in tags
+
+    if diet in (
+        "vegan",
+    ):
+        return "vegan" in tags and "non-vegetarian" not in tags
+
+    if diet in (
+        "non-vegetarian",
+        "non vegetarian",
+        "nonveg",
+        "non-veg",
+    ):
+        return "non-vegetarian" in tags
+
+    # balanced/default:
+    return True
+
+
+def _filter_foods(profile: Dict) -> List[Dict]:
+    diet_pref = str(
+        profile.get("diet_pref", "balanced")
+    ).lower().strip()
+
+    allergies = _normalise_list(
+        profile.get("allergies", [])
+    )
+
+    cuisines = _normalise_list(
+        profile.get("cuisines", [])
+    )
+
+    foods = []
+
+    for food in FOODS:
+        if not _is_allowed_diet(food, diet_pref):
+            continue
+
+        if not _matches_allergies(food, allergies):
+            continue
+
+        # Cuisine is a preference, not a hard restriction.
+        # Prefer matching cuisine but keep alternatives available.
+        foods.append(food)
+
+    if not foods:
+        raise ValueError(
+            "No suitable foods found for the selected diet preference/allergies."
+        )
+
+    if cuisines:
+        preferred = [
+            food
+            for food in foods
+            if str(food.get("cuisine", "")).lower()
+            in cuisines
+        ]
+
+        if preferred:
+            foods = preferred
+
+    return foods
+
+
+def _meal_type_score(food: Dict, meal_type: str) -> int:
+    tags = {
+        str(tag).lower()
+        for tag in food.get("tags", [])
+    }
+
+    meal = meal_type.lower()
+
+    score = 0
+
+    if meal == "breakfast" and "breakfast" in tags:
+        score += 10
+
+    if meal == "snack":
+        if "breakfast" in tags:
+            score += 2
+        if "protein" in tags:
+            score += 3
+
+    if meal in ("lunch", "dinner"):
+        if "balanced" in tags:
+            score += 4
+        if "protein" in tags:
+            score += 2
+
+    return score
+
+
+def _choose_food(
+    foods: List[Dict],
+    meal_type: str,
+    day_index: int,
+    meal_index: int,
+) -> Dict:
+
+    ranked = sorted(
+        foods,
+        key=lambda food: (
+            _meal_type_score(food, meal_type),
+            -(
+                (
+                    day_index * 7
+                    + meal_index * 3
+                ) % max(len(foods), 1)
+            ),
+        ),
+        reverse=True,
+    )
+
+    # Rotate through foods so different days do not all repeat
+    # exactly the same meal.
+    offset = (
+        day_index * 2
+        + meal_index
+    ) % len(ranked)
+
+    return ranked[offset]
+
+
+def _scaled_meal(
+    food: Dict,
+    target_calories: float,
+    meal_type: str,
+) -> Dict:
+
+    per100 = food["per100"]
+    base_kcal = max(
+        _number(per100.get("kcal")),
+        1
+    )
+
+    portion_g = (
+        target_calories / base_kcal
+    ) * 100
+
+    portion_g = max(
+        40,
+        min(700, portion_g)
+    )
+
+    factor = portion_g / 100
+
+    kcal = round(
+        _number(per100.get("kcal")) * factor
+    )
+
+    protein = round(
+        _number(per100.get("p")) * factor,
+        1
+    )
+
+    carbs = round(
+        _number(per100.get("c")) * factor,
+        1
+    )
+
+    fat = round(
+        _number(per100.get("f")) * factor,
+        1
+    )
+
+    return {
+        "meal": meal_type,
+        "name": food["name"],
+        "portion_g": round(portion_g),
+        "calories": kcal,
+        "protein": protein,
+        "carbs": carbs,
+        "fat": fat,
+    }
+
+
+def _build_day(
+    foods: List[Dict],
+    daily_calories: int,
+    day_number: int,
+) -> Dict:
+
+    meals = []
+
+    for meal_index, (
+        meal_type,
+        percentage,
+    ) in enumerate(
+        MEAL_DISTRIBUTION.items()
+    ):
+        target = (
+            daily_calories * percentage
+        )
+
+        food = _choose_food(
+            foods,
+            meal_type,
+            day_number,
+            meal_index,
+        )
+
+        meals.append(
+            _scaled_meal(
+                food,
+                target,
+                meal_type,
+            )
+        )
+
+    # Correct rounding so the displayed meal calories
+    # add up to the requested daily target.
+    difference = (
+        daily_calories
+        - sum(
+            meal["calories"]
+            for meal in meals
+        )
+    )
+
+    if difference != 0:
+        last = meals[-1]
+
+        per100_kcal = max(
+            _number(
+                next(
+                    food["per100"]["kcal"]
+                    for food in foods
+                    if food["name"] == last["name"]
+                )
+            ),
+            1,
+        )
+
+        last["calories"] = max(
+            1,
+            last["calories"] + difference
+        )
+
+        last["portion_g"] = round(
+            last["calories"]
+            / per100_kcal
+            * 100
+        )
+
+    return {
+        "day": day_number,
+        "calories": sum(
+            meal["calories"]
+            for meal in meals
+        ),
+        "protein": round(
+            sum(
+                meal["protein"]
+                for meal in meals
+            ),
+            1,
+        ),
+        "carbs": round(
+            sum(
+                meal["carbs"]
+                for meal in meals
+            ),
+            1,
+        ),
+        "fat": round(
+            sum(
+                meal["fat"]
+                for meal in meals
+            ),
+            1,
+        ),
+        "meals": meals,
+    }
+
+
+def generate_plan(profile: Dict) -> Dict:
+    targets = calculate_targets(profile)
+
+    foods = _filter_foods(profile)
+
+    timeline_weeks = int(
+        _number(
+            profile.get("timeline_weeks", 1),
+            1,
+        )
+    )
+
+    timeline_weeks = max(
+        1,
+        min(52, timeline_weeks)
+    )
+
+    total_days = timeline_weeks * 7
+
+    days = []
+
+    for day_number in range(1, total_days + 1):
+        days.append(
+            _build_day(
+                foods,
+                targets["daily_calories"],
+                day_number,
+            )
+        )
+
+    return {
+        "total_cal": targets["daily_calories"],
+        "daily_calories": targets["daily_calories"],
+        "bmr": targets["bmr"],
+        "tdee": targets["tdee"],
+        "macros": targets["macros"],
+        "timeline_weeks": timeline_weeks,
+        "total_days": total_days,
+        "days": days,
+        "engine": "rule-based",
+        "disclaimer": (
+            "This diet plan is generated for informational purposes "
+            "and is not a substitute for professional medical or "
+            "dietary advice."
+        ),
+    }

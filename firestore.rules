@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSelf(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    match /users/{uid}/profile/{document} {
+      allow read, write: if isSelf(uid);
+    }
+
+    match /users/{uid}/plans/{planId} {
+      allow read, write: if isSelf(uid);
+    }
+
+    match /users/{uid}/intake/{date} {
+      allow read, write: if isSelf(uid);
+    }
+
+    match /users/{uid}/files/{fileId} {
+      allow read, write: if isSelf(uid);
+    }
+
+    match /foods/{foodId} {
+      allow read: if request.auth != null;
+    }
+  }
+}
